@@ -156,6 +156,7 @@ func SendProxy(in, repeat chan *http.Request, mutex *sync.Mutex) error {
 		if err != nil {
 			fmt.Println("Proxy Do", err)
 			in <- reqIn
+			mutex.Unlock()
 			continue
 		}
 		if resp.StatusCode != 200 {
@@ -163,6 +164,8 @@ func SendProxy(in, repeat chan *http.Request, mutex *sync.Mutex) error {
 			activeAddress[url] = false
 			in <- reqIn
 			Balance()
+			mutex.Unlock()
+			continue
 		} else {
 			activeAddress[url] = true
 			delete(queue[url], reqIn)
