@@ -9,11 +9,10 @@ import (
 	"os"
 	"sync"
 	"time"
-
-	"gopkg.in/yaml.v2"
+	"tmp/internal"
 )
 
-var Config config
+var Config internal.Config
 var Addresses []string
 var queue map[string]map[*http.Request]bool
 var activeAddress map[string]bool
@@ -34,13 +33,12 @@ func main() {
 		queue[val.Url] = make(map[*http.Request]bool)
 		activeAddress[val.Url] = IsAlive(val.Url)
 	}
-	toSend = make(chan *http.Request, 999)
-	//goBalance()
+	toSend = make(chan *http.Request, 128)
 	http.HandleFunc("/send", Proxy)
 	log.Println("Starting server")
-	//for i := 0; i < 10; i++ {
-	go SendProxy(toSend, nil, &mutex)
-	//}
+	for i := 0; i < 40; i++ {
+		go SendProxy(toSend, nil, &mutex)
+	}
 	err = http.ListenAndServe("127.0.0.1:3333", nil)
 	if err != nil {
 		log.Println(err)
@@ -120,7 +118,6 @@ func IsAlive(url string) bool {
 		log.Println("IsAlive", err)
 		return false
 	}
-	//log.Println(url, r.StatusCode)
 	return r.StatusCode == 200
 }
 
@@ -133,88 +130,43 @@ func Check() {
 }
 
 func SendProxy(in, repeat chan *http.Request, mutex *sync.Mutex) error {
-	client := http.Client{Timeout: 500 * time.Millisecond}
-	var prevreq *http.Request = nil
+	client := http.Client{Timeout: 3000 * time.Millisecond}
 	var reqIn *http.Request
 	for {
-		//time.Sleep(100 * time.Millisecond)
-		//mutex.Lock()
-		for val := range activeAddress {
-			activeAddress[val] = IsAlive(val)
-		}
-		//mutex.Unlock()
 		url, err := GetMin()
 		if err != nil {
 			continue
-			//return err
 		}
+		log.Println(url)
 
-		if prevreq == nil {
-			reqIn = <-in
-		} else {
-			reqIn = prevreq
-		}
-		//log.Println(reqIn)
-
-		//log.Println("Sending to ", url)
-
+		reqIn = <-in
+		queue[url][reqIn] = true
 		req, err := http.NewRequest(reqIn.Method, url, nil)
 
 		if err != nil {
 			fmt.Println(err)
 			continue
-			//return err
 		}
 
 		req.Header = reqIn.Header
 		req.Body = reqIn.Body
-		queue[url][reqIn] = true
+		mutex.Lock()
+		log.Println("size of requests", len(queue[url]), url)
 		resp, err := client.Do(req)
 		if err != nil {
 			fmt.Println("Proxy Do", err)
-			prevreq = reqIn
+			in <- reqIn
 			continue
-			//return err
 		}
-		//mutex.Lock()
 		if resp.StatusCode != 200 {
 			log.Println("Proxy unreached", resp.StatusCode)
 			activeAddress[url] = false
+			in <- reqIn
 			Balance()
-			prevreq = reqIn
 		} else {
 			activeAddress[url] = true
 			delete(queue[url], reqIn)
-			prevreq = nil
 		}
-		//mutex.Unlock()
-		//log.Println(activeAddress)
+		mutex.Unlock()
 	}
-}
-
-func (c *config) GetConfig(configPath string) error {
-	file, err := os.Open(configPath)
-	if err != nil {
-		return err
-	}
-
-	defer func(file *os.File) {
-		err := file.Close()
-		if err != nil {
-			log.Fatal(err)
-		}
-	}(file)
-
-	d := yaml.NewDecoder(file)
-
-	if err := d.Decode(&c); err != nil {
-		return err
-	}
-	return nil
-}
-
-type config struct {
-	Servers []struct {
-		Url string `yaml:"url"`
-	} `yaml:"servers"`
 }
