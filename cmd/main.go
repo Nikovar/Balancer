@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -70,13 +69,6 @@ func Balance() {
 		}
 	}
 
-	sum := 0
-	for _, addr := range active {
-		sum += len(queue[addr])
-	}
-
-	avg := sum / len(active)
-	log.Println(avg)
 }
 
 func Check() {
@@ -101,44 +93,31 @@ func SendProxy(in, repeat chan *http.Request, mutex *sync.Mutex) error {
 		if err != nil {
 			continue
 		}
-		//log.Println(url)
 
 		reqIn = <-in
 		queue[url][reqIn] = true
 		req, err := http.NewRequest(reqIn.Method, url, nil)
 
 		if err != nil {
-			fmt.Println(err)
+			log.Println(err)
 			continue
 		}
 
 		req.Header = reqIn.Header
 		req.Body = reqIn.Body
 		mutex.Lock()
-		log.Println("size of requests", len(queue[url]), url)
-		resp, err := client.Do(req)
+
+		_, err = client.Do(req)
 		if err != nil {
-			fmt.Println("Proxy Do", err)
+			log.Println("Proxy Do", err)
 			activeAddress[url] = false
 			mutex.Unlock()
 			in <- reqIn
 			Balance()
-			fmt.Println("Mutex Unlocked")
 			continue
 		}
-		if resp.StatusCode != 200 {
-			log.Println("Proxy unreached", resp.StatusCode)
-			activeAddress[url] = false
-			mutex.Unlock()
-			in <- reqIn
-			Balance()
-			fmt.Println("Mutex Unlocked")
-			continue
-		} else {
-			activeAddress[url] = true
-			delete(queue[url], reqIn)
-		}
+		activeAddress[url] = true
+		delete(queue[url], reqIn)
 		mutex.Unlock()
-		fmt.Println("Mutex Unlocked")
 	}
 }
