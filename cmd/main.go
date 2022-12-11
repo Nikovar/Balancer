@@ -101,7 +101,7 @@ func SendProxy(in, repeat chan *http.Request, mutex *sync.Mutex) error {
 		if err != nil {
 			continue
 		}
-		log.Println(url)
+		//log.Println(url)
 
 		reqIn = <-in
 		queue[url][reqIn] = true
@@ -119,21 +119,26 @@ func SendProxy(in, repeat chan *http.Request, mutex *sync.Mutex) error {
 		resp, err := client.Do(req)
 		if err != nil {
 			fmt.Println("Proxy Do", err)
-			in <- reqIn
+			activeAddress[url] = false
 			mutex.Unlock()
+			in <- reqIn
+			Balance()
+			fmt.Println("Mutex Unlocked")
 			continue
 		}
 		if resp.StatusCode != 200 {
 			log.Println("Proxy unreached", resp.StatusCode)
 			activeAddress[url] = false
+			mutex.Unlock()
 			in <- reqIn
 			Balance()
-			mutex.Unlock()
+			fmt.Println("Mutex Unlocked")
 			continue
 		} else {
 			activeAddress[url] = true
 			delete(queue[url], reqIn)
 		}
 		mutex.Unlock()
+		fmt.Println("Mutex Unlocked")
 	}
 }
