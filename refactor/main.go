@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"runtime"
 	"sync"
 	"time"
 	"tmp/internal"
@@ -17,6 +18,7 @@ var mutex sync.Mutex
 var ServerStats map[string]internal.ServerProps
 
 func main() {
+	runtime.GOMAXPROCS(10)
 	err := Config.GetConfig("settings.yml")
 	if err != nil {
 		log.Println(err)
@@ -81,10 +83,10 @@ func Proxy(w http.ResponseWriter, r *http.Request) {
 		client := http.Client{Timeout: 1 * time.Second}
 		url, err = internal.GetMinRef(Addresses, ServerStats)
 		if err != nil {
+			log.Println(err)
 			continue
 		}
 		req, err := http.NewRequest(r.Method, url, nil)
-
 		if err != nil {
 			log.Println(err)
 			continue
@@ -95,6 +97,7 @@ func Proxy(w http.ResponseWriter, r *http.Request) {
 		mutex.Lock()
 		ServerStats[url].Queue[r] = true
 		resp, err = client.Do(req)
+		log.Println("Message sent")
 		if err != nil {
 			//log.Println("Proxy Do", err)
 			ServerStats[url] = internal.ServerProps{Url: url, Status: false, Queue: ServerStats[url].Queue}
