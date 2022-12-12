@@ -1,9 +1,12 @@
-package internal
+package api
 
 import (
 	"errors"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -61,4 +64,23 @@ func GetMinRef(addresses []string, serverStats map[string]ServerProps) (string, 
 		return "", errors.New("what")
 	}
 	return result, nil
+}
+
+func GetConfigPath() string {
+	pwd, err := os.Getwd()
+	if err != nil {
+		log.Println(err)
+		os.Exit(1)
+	}
+	split := strings.Split(pwd, string(os.PathSeparator))
+	if split[len(split)-1] == "test" {
+		WorkDirPath = pwd
+	} else {
+		log.Println(split[len(split)-1])
+		pwd = filepath.Dir(pwd)
+		pwd = filepath.Dir(pwd)
+		WorkDirPath = pwd
+	}
+	absPath := filepath.Join(WorkDirPath, "configs", "settings.yml")
+	return absPath
 }
