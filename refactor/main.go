@@ -27,7 +27,8 @@ func main() {
 	for _, val := range Config.Servers {
 		Addresses = append(Addresses, val.Url)
 		ServerStats[val.Url] = internal.ServerProps{
-			Url: val.Url, Status: internal.IsAlive(val.Url), Queue: make(map[*http.Request]bool, 0)}
+			Url: val.Url, Status: internal.IsAlive(val.Url),
+			Queue: map[*http.Request]bool{}}
 	}
 
 	http.HandleFunc("/send", Proxy)
@@ -76,7 +77,6 @@ func Proxy(w http.ResponseWriter, r *http.Request) {
 		url  string
 	)
 	log.Println("Received message")
-	//toSend <- r
 	for {
 		client := http.Client{Timeout: 1 * time.Second}
 		url, err = internal.GetMinRef(Addresses, ServerStats)
@@ -93,11 +93,10 @@ func Proxy(w http.ResponseWriter, r *http.Request) {
 		req.Header = r.Header
 		req.Body = r.Body
 		mutex.Lock()
-
 		ServerStats[url].Queue[r] = true
 		resp, err = client.Do(req)
 		if err != nil {
-			log.Println("Proxy Do", err)
+			//log.Println("Proxy Do", err)
 			ServerStats[url] = internal.ServerProps{Url: url, Status: false, Queue: ServerStats[url].Queue}
 			mutex.Unlock()
 			Balance()
@@ -108,6 +107,7 @@ func Proxy(w http.ResponseWriter, r *http.Request) {
 		mutex.Unlock()
 		break
 	}
+	log.Println(ServerStats)
 	response := fmt.Sprintf("%v", resp)
 	io.WriteString(w, response)
 }

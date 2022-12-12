@@ -45,6 +45,20 @@ func GetMin(addresses []string, queue map[string]map[*http.Request]bool, activeA
 //////
 
 func GetMinRef(addresses []string, serverStats map[string]ServerProps) (string, error) {
-
-	return "", nil
+	min := -1
+	var result string
+	for _, addr := range addresses {
+		if serverStats[addr].Status && min == -1 {
+			min = len(serverStats[addr].Queue)
+			result = addr
+		}
+		if min > len(serverStats[addr].Queue) {
+			min = len(serverStats[addr].Queue)
+			result = addr
+		}
+	}
+	if result == "" {
+		return "", errors.New("what")
+	}
+	return result, nil
 }
