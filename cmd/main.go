@@ -4,6 +4,8 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"sync"
 	"time"
@@ -18,6 +20,11 @@ var toSend chan *http.Request
 var mutex sync.Mutex
 
 func main() {
+
+	// 	u, _ := url.Parse("http://localhost:8080")
+	// rp := httputil.NewSingleHostReverseProxy(u)
+
+	// http.HandlerFunc(rp.ServeHTTP)
 	err := Config.GetConfig("settings.yml")
 	if err != nil {
 		log.Println(err)
@@ -36,8 +43,13 @@ func main() {
 	log.Println("Starting server")
 	for i := 0; i < 40; i++ {
 		go SendProxy(toSend, nil, &mutex)
+
 	}
-	err = http.ListenAndServe("127.0.0.1:3333", nil)
+	u, _ := url.Parse("http://127.0.0.1:8080")
+	rp := httputil.NewSingleHostReverseProxy(u)
+	server := http.Server{Addr: "127.0.0.1:3333",
+		Handler: rp}
+	err = server.ListenAndServe()
 	if err != nil {
 		log.Println(err)
 	}
