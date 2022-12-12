@@ -41,3 +41,10 @@ func GetMin(addresses []string, queue map[string]map[*http.Request]bool, activeA
 	}
 	return result, nil
 }
+
+//////
+
+func GetMinRef(addresses []string, serverStats map[string]ServerProps) (string, error) {
+
+	return "", nil
+}

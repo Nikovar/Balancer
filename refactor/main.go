@@ -13,9 +13,8 @@ import (
 
 var Config internal.Config
 var Addresses []string
-var queue map[string]map[*http.Request]bool
-var activeAddress map[string]bool
 var mutex sync.Mutex
+var ServerStats map[string]internal.ServerProps
 
 func main() {
 	err := Config.GetConfig("settings.yml")
@@ -23,14 +22,12 @@ func main() {
 		log.Println(err)
 		os.Exit(1)
 	}
-
-	activeAddress = make(map[string]bool, len(Config.Servers))
-	queue = make(map[string]map[*http.Request]bool, len(Config.Servers))
+	ServerStats = make(map[string]internal.ServerProps, len(Config.Servers))
 
 	for _, val := range Config.Servers {
 		Addresses = append(Addresses, val.Url)
-		queue[val.Url] = make(map[*http.Request]bool)
-		activeAddress[val.Url] = internal.IsAlive(val.Url)
+		ServerStats[val.Url] = internal.ServerProps{
+			Url: val.Url, Status: internal.IsAlive(val.Url), Queue: make(map[*http.Request]bool, 0)}
 	}
 
 	http.HandleFunc("/send", Proxy)
@@ -50,33 +47,26 @@ func Balance() {
 	var target string
 	var err error
 
-	for addr, ok := range activeAddress {
-		if ok {
+	for addr, val := range ServerStats {
+		if val.Status {
 			active = append(active, addr)
 		} else {
 			inactive = append(inactive, addr)
 		}
+
 	}
 
 	for _, addr := range inactive {
-		for val := range queue[addr] {
-			target, err = internal.GetMin(Addresses, queue, activeAddress)
+		for val := range ServerStats[addr].Queue {
+			target, err = internal.GetMinRef(Addresses, ServerStats)
 			if err != nil {
 				return
 			}
-			queue[target][val] = true
-			delete(queue[addr], val)
+			ServerStats[target].Queue[val] = true
+			delete(ServerStats[addr].Queue, val)
 		}
 	}
 
-}
-
-func Check() {
-	for {
-		for val := range activeAddress {
-			activeAddress[val] = internal.IsAlive(val)
-		}
-	}
 }
 
 func Proxy(w http.ResponseWriter, r *http.Request) {
@@ -89,7 +79,7 @@ func Proxy(w http.ResponseWriter, r *http.Request) {
 	//toSend <- r
 	for {
 		client := http.Client{Timeout: 1 * time.Second}
-		url, err = internal.GetMin(Addresses, queue, activeAddress)
+		url, err = internal.GetMinRef(Addresses, ServerStats)
 		if err != nil {
 			continue
 		}
@@ -104,17 +94,17 @@ func Proxy(w http.ResponseWriter, r *http.Request) {
 		req.Body = r.Body
 		mutex.Lock()
 
-		queue[url][r] = true
+		ServerStats[url].Queue[r] = true
 		resp, err = client.Do(req)
 		if err != nil {
 			log.Println("Proxy Do", err)
-			activeAddress[url] = false
+			ServerStats[url] = internal.ServerProps{Url: url, Status: false, Queue: ServerStats[url].Queue}
 			mutex.Unlock()
 			Balance()
 			continue
 		}
-		activeAddress[url] = true
-		delete(queue[url], r)
+		ServerStats[url] = internal.ServerProps{Url: url, Status: true, Queue: ServerStats[url].Queue}
+		delete(ServerStats[url].Queue, r)
 		mutex.Unlock()
 		break
 	}

@@ -2,6 +2,7 @@ package internal
 
 import (
 	"log"
+	"net/http"
 	"os"
 
 	"gopkg.in/yaml.v2"
@@ -32,4 +33,10 @@ func (c *Config) GetConfig(configPath string) error {
 		return err
 	}
 	return nil
+}
+
+type ServerProps struct {
+	Url    string
+	Status bool
+	Queue  map[*http.Request]bool
 }
